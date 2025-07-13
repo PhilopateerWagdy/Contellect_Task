@@ -1,0 +1,27 @@
+const mongoose = require("mongoose");
+
+const ContactSchema = mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+    required: true,
+  },
+  phone: {
+    type: Number,
+    trim: true,
+    required: true,
+  },
+  address: {
+    type: String,
+    trim: true,
+  },
+  notes: {
+    type: String,
+    trim: true,
+  },
+});
+
+// 3- create model
+const Contacts = mongoose.model("contacts", ContactSchema);
+
+module.exports = Contacts;
