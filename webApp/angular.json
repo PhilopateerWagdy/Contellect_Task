@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "web_app": {
+    "webApp": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -14,6 +14,9 @@
           "builder": "@angular/build:application",
           "options": {
             "browser": "src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
               {
@@ -23,12 +26,7 @@
             ],
             "styles": [
               "src/styles.css"
-            ],
-            "server": "src/main.server.ts",
-            "outputMode": "server",
-            "ssr": {
-              "entry": "src/server.ts"
-            }
+            ]
           },
           "configurations": {
             "production": {
@@ -58,10 +56,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "web_app:build:production"
+              "buildTarget": "webApp:build:production"
             },
             "development": {
-              "buildTarget": "web_app:build:development"
+              "buildTarget": "webApp:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -72,6 +70,10 @@
         "test": {
           "builder": "@angular/build:karma",
           "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
               {
@@ -88,6 +90,6 @@
     }
   },
   "cli": {
-    "analytics": "0f1ad1b1-00e4-4b80-ac29-1a2d78566799"
+    "analytics": false
   }
 }

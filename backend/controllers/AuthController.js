@@ -25,10 +25,7 @@ const login = async (req, res) => {
       }
     );
 
-    res
-      .status(200)
-      .header("x-auth-token", token)
-      .json({ message: "Logged In Successfully." });
+    res.status(200).header("x-auth-token", token).json({ token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
