@@ -10,11 +10,7 @@ export class ContactService {
   private http = inject(HttpClient);
   private apiUrl = 'http://localhost:3001/api/contacts';
 
-  getContacts(
-    page = 1,
-    limit = 5,
-    filters = {}
-  ): Observable<{ contacts: Contact[]; totalPages: number }> {
+  getContacts(page = 1, limit = 5, filters = {}): Observable<any> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
@@ -25,10 +21,7 @@ export class ContactService {
       }
     });
 
-    return this.http.get<{ contacts: Contact[]; totalPages: number }>(
-      this.apiUrl,
-      { params }
-    );
+    return this.http.get<any>(this.apiUrl, { params });
   }
 
   addContact(contact: Partial<Contact>): Observable<Contact> {

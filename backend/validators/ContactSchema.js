@@ -3,14 +3,12 @@ const { z } = require("zod");
 // Validation for creating a cart
 const baseContactSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 letters."),
-  phone: z.coerce
-    .number()
-    .int()
-    .positive()
-    .min(1000000, "Phone must be at least 7 digits")
-    .max(999999999999999, "Phone must be at most 15 digits"),
-  address: z.string().min(5, "Address must be at least 5 letters.").optional(),
-  notes: z.string().min(5, "Notes must be at least 5 letters.").optional(),
+  phone: z
+    .string()
+    .min(7, "Phone must be at least 7 digits")
+    .max(15, "Phone must be at most 15 digits"),
+  address: z.string().min(5, "Address must be at least 5 letters."),
+  notes: z.string().min(5, "Notes must be at least 5 letters."),
 });
 
 const getContactsSchema = z.object({

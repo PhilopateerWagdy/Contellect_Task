@@ -25,20 +25,33 @@ export class AuthService {
 
   logout() {
     localStorage.removeItem('token');
-    this.router.navigate(['/login']);
+    // this.router.navigate(['/login']);
   }
 
   isLoggedIn(): boolean {
     const token = this.getToken();
     if (!token) return false;
     const parts = token.split('.');
-    if (parts.length !== 3) return false; // Ensure proper JWT structure
+    if (parts.length !== 3) return false;
     try {
       const payload = JSON.parse(atob(parts[1]));
-      return payload.exp * 1000 > Date.now();
+      return payload.exp * 1000 > Date.now(); // not expired yet
     } catch (e) {
       console.error('Invalid token structure', e);
       return false;
+    }
+  }
+
+  getUserRole(): string | null {
+    const token = this.getToken();
+    if (!token) return null;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.role || null;
+    } catch (e) {
+      console.error('Invalid token while extracting role', e);
+      return null;
     }
   }
 }

@@ -42,9 +42,7 @@ export class LoginComponent {
     this.loading = true;
     this.authService.login(this.username, this.password).subscribe({
       next: (res) => {
-        console.log('Token received:', res.token);
         this.authService.saveToken(res.token);
-        console.log('Token saved. Navigating to /contacts...');
         this.router.navigate(['/contacts']);
       },
       error: () => {
