@@ -1,14 +1,17 @@
+// Load .env variables
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
 const cors = require("cors");
 
 const contactRouter = require("./routes/Contact");
+const authRouter = require("./routes/Auth");
+const authMiddleware = require("./middlewares/authMW");
 
-// (built-in) middlewares
+// built-in middlewares
 app.use(express.json());
-// Load .env variables
-require("dotenv").config();
 //Enable CORS for all routes
 app.use(
   cors({
@@ -39,7 +42,11 @@ app.get("/", function (req, res) {
   }
 });
 
-// Route for uploads
+// PUBLIC ROUTES
+app.use("/api/users", authRouter);
+// Protect all other routes
+app.use("/api", authMiddleware);
+// PROTECTED ROUTES
 app.use("/api/contacts", contactRouter);
 
 // ------------------------------------------------------

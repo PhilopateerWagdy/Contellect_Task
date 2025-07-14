@@ -1,19 +1,20 @@
-const validate = (schema) => (req, res, next) => {
-  try {
-    req.body = schema.parse(req.body); // Replace with validated data
-    next();
-  } catch (err) {
-    if (err.name === "ZodError") {
-      return res.status(400).json({
-        message: "Validation failed",
-        errors: err.errors.map((e) => ({
-          field: e.path.join("."),
-          message: e.message,
-        })),
-      });
+const validate =
+  (schema, property = "body") =>
+  (req, res, next) => {
+    const result = schema.safeParse(req[property]);
+
+    if (!result.success) {
+      console.error(
+        "Validation failed:",
+        JSON.stringify(result.error, null, 2)
+      );
+      const errorMessages = result.error.issues.map((issue) => issue.message);
+      return res.status(400).json({ errors: errorMessages });
     }
-    return res.status(500).json({ error: "Internal server error" });
-  }
-};
+
+    req[property] = result.data;
+
+    next();
+  };
 
 module.exports = validate;

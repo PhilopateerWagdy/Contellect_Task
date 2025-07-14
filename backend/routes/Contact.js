@@ -3,10 +3,12 @@ const router = express.Router();
 
 const validate = require("../middlewares/validate");
 const {
+  getContactsSchema,
   addContactSchema,
   updateContactSchema,
 } = require("../validators/ContactSchema");
 const contactController = require("../controllers/ContactController");
+const authorize = require("../middlewares/authorize");
 
 // Middleware message
 router.all("/", (req, res, nxt) => {
@@ -15,13 +17,18 @@ router.all("/", (req, res, nxt) => {
 });
 
 // CRUD Operations
-router.get("/", contactController.getContacts);
+router.get(
+  "/",
+  validate(getContactsSchema, "query"),
+  contactController.getContacts
+);
 router.post("/", validate(addContactSchema), contactController.addContact);
 router.put(
   "/:id",
   validate(updateContactSchema),
   contactController.updateContact
 );
-router.delete("/:id", contactController.deleteContact);
+// I assume only admins can delete contact
+router.delete("/:id", authorize("admin"), contactController.deleteContact);
 
 module.exports = router;
