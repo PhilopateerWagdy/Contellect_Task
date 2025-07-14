@@ -31,4 +31,8 @@ router.put(
 // I assume only admins can delete contact
 router.delete("/:id", authorize("admin"), contactController.deleteContact);
 
+// Lock/unlock updating endpoints
+router.post("/:id/lock", contactController.lockContact);
+router.post("/:id/unlock", contactController.unlockContact);
+
 module.exports = router;

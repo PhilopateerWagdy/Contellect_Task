@@ -79,4 +79,56 @@ const deleteContact = async (req, res) => {
   }
 };
 
-module.exports = { addContact, getContacts, updateContact, deleteContact };
+// Lock contact
+const lockContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const contact = await Contact.findById(id);
+    if (!contact) {
+      return res.status(404).json({ error: "Contact not found" });
+    }
+    if (contact.isLocked) {
+      return res.status(409).json({ error: "Contact is already locked" });
+    }
+
+    contact.isLocked = true;
+    await contact.save();
+
+    const io = req.app.get("io");
+    io.emit("contactLocked", { id, isLocked: true });
+
+    res.status(200).json({ id, isLocked: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// Unlock contact
+const unlockContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const contact = await Contact.findById(id);
+    if (!contact) {
+      return res.status(404).json({ error: "Contact not found" });
+    }
+
+    contact.isLocked = false;
+    await contact.save();
+
+    const io = req.app.get("io");
+    io.emit("contactUnlocked", { id, isLocked: false });
+
+    res.status(200).json({ id, isLocked: false });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  addContact,
+  getContacts,
+  updateContact,
+  deleteContact,
+  lockContact,
+  unlockContact,
+};

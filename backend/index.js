@@ -3,16 +3,39 @@ require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
-const app = express();
 const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const contactRouter = require("./routes/Contact");
 const authRouter = require("./routes/Auth");
 const authMiddleware = require("./middlewares/authMW");
 
-// built-in middlewares
+const app = express();
+const server = http.createServer(app);
+
+// ------------------------------------------------------
+// Socket.io setup for real-time contact locking
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+  socket.on("disconnect", () => console.log(`User disconnected: ${socket.id}`));
+});
+
+// Make io globally accessible
+app.set("io", io);
+
+// ------------------------------------------------------
+// Middleware
 app.use(express.json());
-//Enable CORS for all routes
+
+// Enable CORS for all routes
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
@@ -21,37 +44,30 @@ app.use(
 );
 
 // ------------------------------------------------------
-// Databse Connection
-
-// 1- connect to db
+// Database Connection
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("Connected to Database...");
-  })
-  .catch((err) => {
-    console.log("Failed to connect to Database.");
-  });
+  .then(() => console.log("Connected to Database"))
+  .catch((err) => console.error("Failed to connect to Database", err));
 
 // ------------------------------------------------------
-app.get("/", function (req, res) {
-  try {
-    res.status(200).json("Hello from my Server");
-  } catch (err) {
-    console.log(err);
-  }
+// Routes
+
+app.get("/", (req, res) => {
+  res.status(200).json("Hello from my Server");
 });
 
 // PUBLIC ROUTES
 app.use("/api/users", authRouter);
-// Protect all other routes
-app.use("/api", authMiddleware);
+
 // PROTECTED ROUTES
+app.use("/api", authMiddleware);
 app.use("/api/contacts", contactRouter);
 
 // ------------------------------------------------------
-// listen to users requests
+// Start Server
+const PORT = process.env.PORT || 3001;
 
-app.listen(process.env.PORT, () => {
-  console.log(`Listening on port ${process.env.PORT}....`);
+server.listen(PORT, () => {
+  console.log(`Listening on port ${PORT}`);
 });
