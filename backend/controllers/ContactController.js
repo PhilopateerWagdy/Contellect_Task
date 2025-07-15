@@ -45,16 +45,29 @@ const addContact = async (req, res) => {
 const updateContact = async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedContact = await Contact.findByIdAndUpdate(id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const userId = req.user.id;
 
-    if (!updatedContact) {
+    const contact = await Contact.findById(id);
+    if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
     }
+    if (!contact.isLocked || contact.lockedBy !== userId) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to update this contact." });
+    }
 
-    res.status(200).json(updatedContact);
+    ["name", "phone", "address", "notes"].forEach((field) => {
+      if (req.body[field] !== undefined) {
+        contact[field] = req.body[field];
+      }
+    });
+
+    await contact.save();
+    const io = req.app.get("io");
+    io.emit("contactUpdated", contact);
+
+    res.status(200).json(contact);
   } catch (error) {
     console.error(error);
     res.status(400).json({ error: error.message });
@@ -83,22 +96,33 @@ const deleteContact = async (req, res) => {
 const lockContact = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
+
     const contact = await Contact.findById(id);
     if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
     }
+
     if (contact.isLocked) {
-      return res.status(409).json({ error: "Contact is already locked" });
+      if (contact.lockedBy !== null && contact.lockedBy === userId) {
+        // Already locked by the same user
+        return res.status(200).json({ id, isLocked: true, lockedBy: userId });
+      }
+      return res
+        .status(400)
+        .json({ error: "Contact is already locked by another user" });
     }
 
     contact.isLocked = true;
+    contact.lockedBy = userId;
     await contact.save();
 
     const io = req.app.get("io");
-    io.emit("contactLocked", { id, isLocked: true });
+    io.emit("contactLocked", { id, isLocked: true, lockedBy: userId });
 
-    res.status(200).json({ id, isLocked: true });
+    res.status(200).json({ id, isLocked: true, lockedBy: userId });
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: error.message });
   }
 };
@@ -107,19 +131,22 @@ const lockContact = async (req, res) => {
 const unlockContact = async (req, res) => {
   try {
     const { id } = req.params;
+
     const contact = await Contact.findById(id);
     if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
     }
 
     contact.isLocked = false;
+    contact.lockedBy = null;
     await contact.save();
 
     const io = req.app.get("io");
-    io.emit("contactUnlocked", { id, isLocked: false });
+    io.emit("contactLocked", { id, isLocked: false });
 
     res.status(200).json({ id, isLocked: false });
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: error.message });
   }
 };

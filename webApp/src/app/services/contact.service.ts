@@ -35,4 +35,18 @@ export class ContactService {
   deleteContact(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
   }
+
+  lockContact(id: string): Observable<{ id: string; isLocked: boolean }> {
+    return this.http.post<{ id: string; isLocked: boolean }>(
+      `${this.apiUrl}/${id}/lock`,
+      {}
+    );
+  }
+
+  unlockContact(id: string): Observable<{ id: string; isLocked: boolean }> {
+    return this.http.post<{ id: string; isLocked: boolean }>(
+      `${this.apiUrl}/${id}/unlock`,
+      {}
+    );
+  }
 }

@@ -6,6 +6,7 @@ const ContactSchema = mongoose.Schema({
   address: { type: String, trim: true },
   notes: { type: String, trim: true },
   isLocked: { type: Boolean, default: false },
+  lockedBy: { type: String, default: null },
 });
 
 // 3- create model

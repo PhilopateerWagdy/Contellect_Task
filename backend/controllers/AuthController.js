@@ -2,8 +2,8 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const users = [
-  { username: "user1", password: "user1", role: "admin" },
-  { username: "user2", password: "user2", role: "user" },
+  { id: "1", username: "user1", password: "user1", role: "admin" },
+  { id: "2", username: "user2", password: "user2", role: "user" },
 ];
 
 const login = async (req, res) => {
@@ -18,7 +18,7 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { username: user.username, role: user.role },
+      { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       {
         expiresIn: "1h",

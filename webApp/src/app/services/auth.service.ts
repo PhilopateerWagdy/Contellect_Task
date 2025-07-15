@@ -54,4 +54,18 @@ export class AuthService {
       return null;
     }
   }
+
+  getUserId(): string | null {
+    const token = this.getToken();
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      const payload = JSON.parse(atob(parts[1]));
+      return payload.id;
+    } catch (e) {
+      console.error('Invalid token structure', e);
+      return null;
+    }
+  }
 }

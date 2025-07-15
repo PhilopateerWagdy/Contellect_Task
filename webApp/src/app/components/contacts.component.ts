@@ -1,4 +1,11 @@
-import { AfterViewInit, Component, OnInit, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  OnInit,
+  OnDestroy,
+  inject,
+  ViewChild,
+} from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import type { ColDef } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -8,8 +15,8 @@ import { ContactService } from '../services/contact.service';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { io, Socket } from 'socket.io-client';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -20,15 +27,13 @@ ModuleRegistry.registerModules([AllCommunityModule]);
   styleUrls: ['../app.css'],
   template: `
     <button (click)="logout()" style="margin-bottom: 10px;">Logout</button>
-
-    <!-- Add Contact Form -->
     <div
       style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px;"
     >
       <input [(ngModel)]="newContact.name" placeholder="Name" required />
       <input [(ngModel)]="newContact.phone" placeholder="Phone" required />
-      <input [(ngModel)]="newContact.address" placeholder="Address" required />
-      <input [(ngModel)]="newContact.notes" placeholder="Notes" required />
+      <input [(ngModel)]="newContact.address" placeholder="Address" />
+      <input [(ngModel)]="newContact.notes" placeholder="Notes" />
       <button (click)="addContact()">Add Contact</button>
     </div>
 
@@ -40,36 +45,32 @@ ModuleRegistry.registerModules([AllCommunityModule]);
       [rowData]="rowData"
       [columnDefs]="colDefs"
       [getRowId]="getRowId"
+      (cellEditingStarted)="onCellEditingStarted($event)"
+      (cellEditingStopped)="onCellEditingStopped($event)"
     ></ag-grid-angular>
 
     <div
       style="margin-top: 10px; display: flex; align-items: center; gap: 10px;"
     >
       <button (click)="previousPage()" [disabled]="page <= 1">Previous</button>
-      <span>
-        <span>Page {{ page }} of {{ totalPages }}</span>
-        <span style="margin-left: 1rem;">
-          {{ startContact }}-{{ endContact }} of {{ totalContacts }}
-        </span>
-      </span>
+      <span>Page {{ page }} of {{ totalPages }}</span>
+      <span style="margin-left: 1rem;"
+        >{{ startContact }}-{{ endContact }} of {{ totalContacts }}</span
+      >
       <button (click)="nextPage()" [disabled]="page >= totalPages">Next</button>
     </div>
   `,
 })
-export class ContactsComponent implements OnInit, AfterViewInit {
+export class ContactsComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(AgGridAngular) grid!: AgGridAngular;
   private contactService = inject(ContactService);
   private router = inject(Router);
   private authService = inject(AuthService);
 
+  socket!: Socket;
   rowData: any[] = [];
   userRole: string | null = null;
-  newContact = {
-    name: '',
-    phone: '',
-    address: '',
-    notes: '',
-  };
+  newContact = { name: '', phone: '', address: '', notes: '' };
 
   totalPages = 1;
   page = 1;
@@ -78,11 +79,41 @@ export class ContactsComponent implements OnInit, AfterViewInit {
   filters: Record<string, string> = {};
 
   colDefs: ColDef[] = [
-    { field: 'name', editable: true, filter: true },
-    { field: 'phone', editable: true, filter: true },
-    { field: 'address', editable: true, filter: true },
-    { field: 'notes', editable: true },
-    { field: 'update lock' },
+    {
+      field: 'name',
+      editable: (params) => {
+        const data = params.data;
+        return !data.isLocked || data.lockedBy === this.authService.getUserId();
+      },
+      filter: true,
+    },
+    {
+      field: 'phone',
+      editable: (params) => {
+        const data = params.data;
+        return !data.isLocked || data.lockedBy === this.authService.getUserId();
+      },
+      filter: true,
+    },
+    {
+      field: 'address',
+      editable: (params) => {
+        const data = params.data;
+        return !data.isLocked || data.lockedBy === this.authService.getUserId();
+      },
+      filter: true,
+    },
+    {
+      field: 'notes',
+      editable: (params) => {
+        const data = params.data;
+        return !data.isLocked || data.lockedBy === this.authService.getUserId();
+      },
+    },
+    {
+      field: 'isLocked',
+      valueFormatter: (params) => (params.value ? 'Locked' : ''),
+    },
   ];
 
   getRowId = (params: any) => params.data._id;
@@ -93,16 +124,109 @@ export class ContactsComponent implements OnInit, AfterViewInit {
       this.colDefs.push({
         headerName: 'Actions',
         cellRenderer: (params: any) => {
-          const button = document.createElement('button');
-          button.innerText = 'Delete';
-          button.addEventListener('click', () =>
+          const btn = document.createElement('button');
+          btn.innerText = 'Delete';
+          btn.addEventListener('click', () =>
             this.deleteContact(params.data._id)
           );
-          return button;
+          return btn;
         },
       });
     }
+    this.connectSocket();
     this.loadContacts();
+  }
+
+  ngAfterViewInit() {
+    this.grid.api.addEventListener('filterChanged', () =>
+      this.handleGridFilterChange()
+    );
+  }
+
+  ngOnDestroy() {
+    if (this.socket) this.socket.disconnect();
+  }
+
+  connectSocket() {
+    this.socket = io('http://localhost:3001', { withCredentials: true });
+    this.socket.on('connect', () => console.log('Connected to Socket.io'));
+    this.socket.on('contactLocked', ({ id, isLocked, lockedBy }) => {
+      const rowNode = this.grid.api.getRowNode(id);
+      if (rowNode) {
+        rowNode.setDataValue('isLocked', isLocked);
+        rowNode.setDataValue('lockedBy', lockedBy);
+      }
+    });
+    this.socket.on('contactUpdated', (updatedContact) => {
+      const rowNode = this.grid.api.getRowNode(updatedContact._id);
+      if (rowNode) {
+        ['name', 'phone', 'address', 'notes', 'isLocked', 'lockedBy'].forEach(
+          (field) => {
+            if (updatedContact[field] !== undefined) {
+              rowNode.setDataValue(field, updatedContact[field]);
+            }
+          }
+        );
+      } else {
+        this.loadContacts();
+      }
+    });
+  }
+
+  onCellEditingStarted(event: any) {
+    const id = event.data._id;
+    this.contactService.lockContact(id).subscribe({
+      next: (response) => {
+        console.log('Contact locked on server.');
+        event.node.setDataValue('isLocked', true);
+        event.node.setDataValue('lockedBy', this.authService.getUserId());
+      },
+      error: (err) => {
+        alert(
+          err.error?.message || 'Contact is already locked by another user.'
+        );
+        if (this.grid.api.getEditingCells().length > 0)
+          this.grid.api.stopEditing(true);
+        // Do NOT update local state if locking failed
+        this.loadContacts();
+      },
+    });
+  }
+
+  onCellEditingStopped(event: any) {
+    const id = event.data._id;
+    const userId = this.authService.getUserId();
+
+    const updatedData = {
+      name: event.data.name,
+      phone: event.data.phone,
+      address: event.data.address,
+      notes: event.data.notes,
+    };
+
+    // Always attempt update regardless of local state
+    this.contactService.updateContact(id, updatedData).subscribe({
+      next: () => {
+        console.log('Contact updated on server.');
+      },
+      error: (err) => {
+        alert(err.error?.message || 'Failed to update contact.');
+        this.loadContacts();
+      },
+    });
+
+    // Always attempt unlock
+    this.contactService.unlockContact(id).subscribe({
+      next: () => {
+        console.log('Contact unlocked on server.');
+        event.node.setDataValue('isLocked', false);
+        event.node.setDataValue('lockedBy', null);
+      },
+      error: (err) => {
+        alert(err.error?.message || 'Failed to unlock contact.');
+        this.loadContacts();
+      },
+    });
   }
 
   loadContacts() {
@@ -110,42 +234,26 @@ export class ContactsComponent implements OnInit, AfterViewInit {
       .getContacts(this.page, this.pageLimit, this.filters)
       .subscribe({
         next: (data) => {
-          this.rowData = data.contacts.slice(); // triggers Angular change detection
+          this.rowData = data.contacts.slice();
           this.totalPages = data.totalPages;
           this.totalContacts = data.totalContacts;
-
-          // Optional force refresh
-          if (this.grid && this.grid.api) {
+          if (this.grid && this.grid.api)
             this.grid.api.refreshCells({ force: true });
-          }
         },
         error: (err) => {
-          console.error('Failed to fetch contacts', err);
           alert('Failed to fetch contacts.');
+          console.error(err);
         },
       });
   }
 
-  ngAfterViewInit() {
-    this.grid.api.addEventListener('filterChanged', () => {
-      this.handleGridFilterChange();
-    });
-  }
-
   handleGridFilterChange() {
-    const filterModel = this.grid.api.getFilterModel();
-
+    const model = this.grid.api.getFilterModel();
     this.filters = {};
-    if (filterModel['name']?.filter) {
-      this.filters['name'] = filterModel['name'].filter;
-    }
-    if (filterModel['phone']?.filter) {
-      this.filters['phone'] = filterModel['phone'].filter;
-    }
-    if (filterModel['address']?.filter) {
-      this.filters['address'] = filterModel['address'].filter;
-    }
-
+    if (model['name']?.filter) this.filters['name'] = model['name'].filter;
+    if (model['phone']?.filter) this.filters['phone'] = model['phone'].filter;
+    if (model['address']?.filter)
+      this.filters['address'] = model['address'].filter;
     this.page = 1;
     this.loadContacts();
   }
@@ -169,36 +277,25 @@ export class ContactsComponent implements OnInit, AfterViewInit {
   }
 
   get endContact() {
-    const potentialEnd = this.page * this.pageLimit;
-    return potentialEnd > this.totalContacts
-      ? this.totalContacts
-      : potentialEnd;
+    const end = this.page * this.pageLimit;
+    return end > this.totalContacts ? this.totalContacts : end;
   }
 
   deleteContact(id: string) {
     if (confirm('Are you sure you want to delete this contact?')) {
       const rowNode = this.grid.api.getRowNode(id);
-      if (rowNode) {
-        this.grid.api.applyTransaction({ remove: [rowNode.data] });
-      }
-
+      if (rowNode) this.grid.api.applyTransaction({ remove: [rowNode.data] });
       this.contactService.deleteContact(id).subscribe({
         next: () => {
           this.totalContacts--;
-
           const maxPage = Math.ceil(this.totalContacts / this.pageLimit) || 1;
-
-          // Update the page BEFORE calling loadContacts
-          if (this.page > maxPage) {
-            this.page = maxPage;
-          }
-
-          this.loadContacts(); // Will now fetch using the correct updated page
+          if (this.page > maxPage) this.page = maxPage;
+          this.loadContacts();
         },
         error: (err) => {
-          console.error('Failed to delete contact', err);
-          alert('Failed to delete contact on server. Reverting.');
-          this.loadContacts(); // to revert UI if backend deletion failed
+          alert('Failed to delete contact on server.');
+          console.error(err);
+          this.loadContacts();
         },
       });
     }
@@ -209,36 +306,18 @@ export class ContactsComponent implements OnInit, AfterViewInit {
       alert('Name and Phone are required.');
       return;
     }
-
     this.contactService.addContact(this.newContact).subscribe({
-      next: (createdContact) => {
+      next: () => {
         this.totalContacts++;
         const newTotalPages =
           Math.ceil(this.totalContacts / this.pageLimit) || 1;
-
-        if (this.page !== newTotalPages) {
-          this.page = newTotalPages;
-        }
-
+        if (this.page !== newTotalPages) this.page = newTotalPages;
         this.loadContacts();
-
-        this.newContact = {
-          name: '',
-          phone: '',
-          address: '',
-          notes: '',
-        };
+        this.newContact = { name: '', phone: '', address: '', notes: '' };
       },
       error: (err) => {
-        console.error('Failed to add contact', err);
-
-        if (err.error && err.error.errors && Array.isArray(err.error.errors)) {
-          alert(err.error.errors.join('\n')); // show all errors line by line
-        } else if (err.error && err.error.message) {
-          alert(err.error.message);
-        } else {
-          alert('Failed to add contact due to an unknown error.');
-        }
+        alert(err.error?.message || 'Failed to add contact.');
+        console.error(err);
       },
     });
   }
